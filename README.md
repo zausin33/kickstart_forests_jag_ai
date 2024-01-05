@@ -13,6 +13,7 @@ Data for the observations of 1000 forests consisting on:
 - **`Sentinel_2A_{ABCD}`** columns with ABCD corresponding to a wavelength: reflection values corresponding to the bands of the actual satellite measurements 
 - **`w{ABCD}`** columns with ABCD corresponding to a wavelength: contain the simulated sunlight reflection values for each wavelenth of the curve.
 
+All Data was simulated by Rico Fischer, Team Leader 'Digital Twin and Forest Modelling', Julius Kühn-Institute(JKI) for Forest Protection, 
 
 ## Notebooks
 
