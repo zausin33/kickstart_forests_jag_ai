@@ -21,6 +21,7 @@ if __name__ == '__main__':
     # define target and features
     X = forests_data.drop(['lai'], axis=1)
     y = forests_data['lai']
+    print('Xshape: \n{}'.format(X.shape))
 
     """
         Train-Test Split
