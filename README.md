@@ -26,3 +26,10 @@ Baseline model to predict `lai`.
 - Using a subset of the features available
 - Simple regression models
 - No hyperparameter optimization
+
+### Refactoring
+**Python Environment**
+
+Use [conda](https://docs.conda.io/projects/miniconda/en/latest/) to create an environment based on [environment.yml](environment.yml).
+
+    conda env create -f environment.yml
