@@ -1,29 +1,33 @@
-import numpy as np
-import optuna
-from sklearn.feature_selection import SelectPercentile, chi2
-from sklearn.impute import SimpleImputer
+import warnings
+from typing import Tuple, Optional, Union, List
 
-import config
+import numpy as np
 import pandas as pd
 from lightgbm import LGBMRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import cross_val_score, KFold
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder
+from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin
 from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-import matplotlib.pyplot as plt
-import seaborn as sns
-import time
 from sklearn.decomposition import PCA
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OrdinalEncoder
 
-from typing import Tuple, Optional, Any
-import warnings
+import config
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
-LEAF_AREA_INDEX = 'lai'
-LEAF_ID = 'id'
+COL_LEAF_AREA_INDEX = 'lai'
+COL_ID = 'id'
+COL_WETNESS = 'wetness'
+COL_TREE_SPECIES = 'treeSpecies'
+COLS_SENTINEL = ["Sentinel_2A_492.4", "Sentinel_2A_559.8", "Sentinel_2A_664.6", "Sentinel_2A_704.1",
+                 "Sentinel_2A_740.5", "Sentinel_2A_782.8", "Sentinel_2A_832.8", "Sentinel_2A_864.7",
+                 "Sentinel_2A_1613.7", "Sentinel_2A_2202.4"]
+COLS_WAVELENGTH = [f"w{wavelength}" for wavelength in range(400, 2501)]
+
+COLS_CATEGORICAL = [COL_TREE_SPECIES]
+COLS_NUMERICAL = [COL_WETNESS] + COLS_SENTINEL + COLS_WAVELENGTH
 
 
 class Dataset:
@@ -42,7 +46,7 @@ class Dataset:
         """
         :return: the full data frame for this dataset (including the class column)
         """
-        df = pd.read_csv(config.csv_data_path(self.data_filename))
+        df = pd.read_csv(config.csv_data_path(self.data_filename), index_col=0)
         if self.num_samples is not None:
             df = df.sample(self.num_samples, random_state=self.random_seed)
         return df
@@ -53,30 +57,157 @@ class Dataset:
         series of class values
         """
         df = self.load_data_frame()
-        return df.drop(columns=[LEAF_AREA_INDEX], axis=1), df[LEAF_AREA_INDEX]
+        return df.drop(columns=[COL_LEAF_AREA_INDEX]), df[COL_LEAF_AREA_INDEX]
+
+
+class DataFrameColumnTransformer(ColumnTransformer):
+    def __init__(self, transformers, remainder='drop', sparse_threshold=0.3, n_jobs=None, transformer_weights=None,
+                 verbose=False):
+        super().__init__(transformers, remainder=remainder, sparse_threshold=sparse_threshold, n_jobs=n_jobs,
+                         transformer_weights=transformer_weights, verbose=verbose)
+        self.output_columns = None
+
+    def fit_transform(self, X, y=None, **params):
+        result = super().fit_transform(X, y, **params)
+        self.output_columns = self.get_feature_names_out()
+
+        # if without the prefix, there are no duplicates, remove the prefix
+        if len(set(self.output_columns)) == len(
+                set([col.split('__')[1] if '__' in col else col for col in self.output_columns])):
+            self.output_columns = [col.split('__')[1] if '__' in col else col for col in self.output_columns]
+
+        if isinstance(X, pd.DataFrame):
+            return pd.DataFrame(result, columns=self.output_columns, index=X.index)
+        return result
+
+    def transform(self, X, **params):
+        result = super().transform(X, **params)
+        if isinstance(X, pd.DataFrame):
+            return pd.DataFrame(result, columns=self.output_columns, index=X.index)
+        return result
+
+
+class DataFrameTransformer(TransformerMixin, BaseEstimator):
+    def __init__(self, transformer, columns=None):
+        """
+        transformer: The sklearn transformer to wrap
+        columns: The column names to apply to the output DataFrame. If None, attempt to use the input column names.
+        """
+        self.transformer = transformer
+        self.columns = columns
+
+    def fit(self, X, y=None):
+        self.transformer.fit(X, y)
+        # Attempt to capture input column names if columns are not provided
+        if self.columns is None and hasattr(X, 'columns'):
+            self.columns = X.columns
+        return self
+
+    def transform(self, X, y=None):
+        transformed = self.transformer.transform(X)
+        # If transformer output is not a DataFrame, convert it to DataFrame with the captured or provided column names
+        if not isinstance(transformed, pd.DataFrame):
+            if self.columns is not None:
+                transformed = pd.DataFrame(transformed, columns=self.columns, index=X.index)
+            else:
+                transformed = pd.DataFrame(transformed, index=X.index)
+        return transformed
+
+    def get_feature_names_out(self, input_features=None):
+        if self.columns is not None:
+            return np.array(self.columns)
+        if input_features is not None:
+            return np.array(input_features)
+        raise ValueError("Feature names could not be determined.")
+
+
+class CustomPCA(TransformerMixin):
+    def __init__(self, n_components=0.95):
+        self.n_components = n_components
+        self.pca = PCA(n_components=self.n_components)
+        self.cols = None
+
+    def fit(self, X, y=None):
+        transformed_data = self.pca.fit_transform(X)
+        self.cols = [f"PCA_{i + 1}" for i in range(transformed_data.shape[1])]
+        return self
+
+    def transform(self, X, y=None):
+        transformed_data = self.pca.transform(X)
+        return pd.DataFrame(transformed_data, index=X.index, columns=self.cols)
+
+    def get_feature_names_out(self, input_features=None):
+        return np.array(self.cols)
+
+
+class CustomLGBMRegressor(BaseEstimator, RegressorMixin):
+    def __init__(self, categorical_feature: Union[str, List[str]] = 'auto', **kwargs):
+        self.model = LGBMRegressor(**kwargs)
+        self.categorical_feature = categorical_feature
+
+    def fit(self, X, y, **fit_params):
+        # If X is a DataFrame, we can use column names
+        if isinstance(X, pd.DataFrame) and self.categorical_feature != 'auto':
+            cat_features = [col for col in self.categorical_feature if col in X.columns]
+        else:
+            cat_features = 'auto'  # Let LightGBM handle it automatically
+
+        self.model.fit(X, y, categorical_feature=cat_features, **fit_params)
+        return self
+
+    def predict(self, X, **predict_params):
+        return self.model.predict(X, **predict_params)
+
+    @property
+    def feature_importances_(self):
+        return self.model.feature_importances_
 
 
 class ModelFactory:
-    def __scaleEncodePipeline(self) -> Pipeline:
-        categorical_cols = [col for col in X.columns if X[col].dtype == 'object']
-        numerical_cols = [col for col in X.columns if col not in categorical_cols + [LEAF_ID, LEAF_AREA_INDEX]]
-
+    @classmethod
+    def __scaleEncodePipeline(cls) -> BaseEstimator:
         numeric_transformer = Pipeline(
-            steps=[("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]
+            steps=[("imputer", DataFrameTransformer(SimpleImputer(strategy="median"), columns=COLS_NUMERICAL))]
         )
         categorical_transformer = Pipeline(
             steps=[
-                ("encoder", OneHotEncoder(handle_unknown="ignore")),
-                ("selector", SelectPercentile(chi2, percentile=50)),
+                ("encoder", DataFrameTransformer(OrdinalEncoder(), columns=COLS_CATEGORICAL)),
             ]
         )
-        preprocessor = ColumnTransformer(
+        preprocessor = DataFrameColumnTransformer(
             transformers=[
-                ("num", numeric_transformer, numerical_cols),
-                ("cat", categorical_transformer, categorical_cols),
+                ("num", numeric_transformer, COLS_NUMERICAL),
+                ("cat", categorical_transformer, COLS_CATEGORICAL),
             ]
         )
         return preprocessor
+
+    @classmethod
+    def __dimensionalityReductionPipeline(cls) -> BaseEstimator:
+        pca_transformer = Pipeline(
+            steps=[("pca", CustomPCA(n_components=0.95))]
+        )
+        preprocessor = DataFrameColumnTransformer(
+            transformers=[
+                ("pca", pca_transformer, COLS_SENTINEL + COLS_WAVELENGTH),
+            ], remainder='passthrough'
+        )
+        return preprocessor
+
+    @classmethod
+    def lgbm_regressor(cls, model_params=None) -> Pipeline:
+        preprocessor = cls.__scaleEncodePipeline()
+        pca = cls.__dimensionalityReductionPipeline()
+        return Pipeline([
+            ("preprocessor", preprocessor),
+            ("dim_reduction", pca),
+            ("model", CustomLGBMRegressor(categorical_feature=COLS_CATEGORICAL, random_state=42, verbose=-1,
+                                          **(model_params or {})))])
+
+    @classmethod
+    def lgbmRegressorCV(cls) -> Pipeline:
+        pass
+
     @classmethod
     def explain(cls):
         feat_df = pd.DataFrame(
@@ -94,48 +225,6 @@ class ModelFactory:
         feat_df = feat_df.sort_values(by="importance", ascending=False).head(15)
         feat_df.plot(x="feature", y="importance", kind="bar", color="blue", )
 
-    @classmethod
-    def lgbm_regressor(cls, best_params = None) -> Pipeline:
-        preprocessor = cls.__scaleEncodePipeline()
-        return Pipeline([
-            ("preprocessor", preprocessor),
-            ("model", LGBMRegressor(random_state=42, best_params=best_params))])
-
-    @classmethod
-    def lgbmRegressorCV(cls) -> Pipeline:
-        pass
-
-class HyperParameterOptimizers:
-    @classmethod
-    def param_bounds(cls, trial: optuna.Trial):
-        return {
-            # Sample an integer between 10 and 100
-            "n_estimators": trial.suggest_categorical("n_estimators", [50, 100, 200, 300, 400, 500, 700, 1000]),
-            "num_leaves": trial.suggest_int("num_leaves", 10, 100),
-            "max_depth": trial.suggest_int("max_depth", 10, 100),
-            # Sample a categorical value from the list provided
-            "objective": trial.suggest_categorical(
-                "objective", ["regression", "regression_l1", "huber"]
-            ),
-            "random_state": [42],
-            # Sample from a uniform distribution between 0.3 and 1.0
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.3, 1.0),
-            # Sample from a uniform distribution between 0 and 10
-            "reg_alpha": trial.suggest_float("reg_alpha", 0, 100),
-            # Sample from a uniform distribution between 0 and 10
-            "reg_lambda": trial.suggest_float("reg_lambda", 0, 100),
-        }
-
-    @classmethod
-    def objective(cls, trial: optuna.Trial):
-        gbm_model = LGBMRegressor()
-        params = cls.param_bounds(trial)
-        gbm_model.set_params(**params)
-
-        gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
-
-        return gbm_model.score(X_val, y_val)
-
 
 if __name__ == '__main__':
     data = Dataset()
@@ -144,86 +233,11 @@ if __name__ == '__main__':
     X, y = data.load_xy()
     print('Xshape: \n{}'.format(X.shape))
 
-    """
-        Train-Test Split
-        Train-test split is performed with a 60-20-20 ratio.
-        Feature engineering steps are applied separately to the train test and validation sets to avoid data leakage.
-        Shuffle is left to True to ensure that all sets have the same distribution.
-        To check this, we plot the distribution of the target variable.
-    """
-
     X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.4, random_state=42)
     X_test, X_val, y_test, y_val = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
 
-    # Run some plots
-    sns.kdeplot(y_train, label='y_train')
-    sns.kdeplot(y_val, label='y_val')
-    sns.kdeplot(y_test, label='y_test')
-    plt.legend()
-    plt.show()
-
-    """
-    Feature Engineering
-        We fill missing values with the median of each column.
-        We perform PCA on the wavelength features to reduce the dimensionality. We retain 95% of the variance.
-        Categories are encoded with OrdinalEncoder and then passed to LightGBM as categorical features. LightGBM will handle the encoding internally.
-        Numerical features are scaled with StandardScaler.
-    Explaining Feature Selection
-        We keep the treeSpecies and wetness features and only perform dimensionality reduction on the wavelength features.
-        This is because the wavelength features are highly correlated and we want to reduce the dimensionality of the dataset.
-    """
-
-    # Identify categorical and numerical columns
-    categorical_cols = [col for col in X.columns if X[col].dtype == 'object']
-    numerical_cols = [col for col in X.columns if col not in categorical_cols + [LEAF_ID, LEAF_AREA_INDEX]]
-
-    # Fill missing values
-    X_train[numerical_cols] = X_train[numerical_cols].fillna(X_train[numerical_cols].median())
-    X_val[numerical_cols] = X_val[numerical_cols].fillna(X_train[numerical_cols].median())
-    X_test[numerical_cols] = X_test[numerical_cols].fillna(X_train[numerical_cols].median())
-
-    # feature selection and expansion methods
-    pca = PCA(n_components=0.95)  # Retain 95% of variance
-    X_train_pca = pca.fit_transform(X_train.iloc[:, 2:])
-    X_val_pca = pca.transform(X_val.iloc[:, 2:])
-    X_test_pca = pca.transform(X_test.iloc[:, 2:])
-
-    # Convert the PCA results into a DataFrame
-    X_train_pca_df = pd.DataFrame(X_train_pca, columns=[f'PCA_{i}' for i in range(X_train_pca.shape[1])],
-                                  index=X_train.index)
-    X_val_pca_df = pd.DataFrame(X_val_pca, columns=[f'PCA_{i}' for i in range(X_val_pca.shape[1])], index=X_val.index)
-    X_test_pca_df = pd.DataFrame(X_test_pca, columns=[f'PCA_{i}' for i in range(X_test_pca.shape[1])],
-                                 index=X_test.index)
-
-    X_train = pd.concat([X_train.iloc[:, :2], X_train_pca_df], axis=1)
-    X_val = pd.concat([X_val.iloc[:, :2], X_val_pca_df], axis=1)
-    X_test = pd.concat([X_test.iloc[:, :2], X_test_pca_df], axis=1)
-
-    # Identify new categorical and numerical columns
-    categorical_cols = [col for col in X_train.columns if X_train[col].dtype == 'object']
-    numerical_cols = [col for col in X_train.columns if col not in categorical_cols + [LEAF_ID, LEAF_AREA_INDEX]]
-
-    print(X_train)
-
-    # encode categorical features - NOT NEEDED, COVERED in the pipeline in the ModelFactory class
-    """ordinal_encoder = OrdinalEncoder()
-    X_train[categorical_cols] = ordinal_encoder.fit_transform(X_train[categorical_cols])
-    X_val[categorical_cols] = ordinal_encoder.transform(X_val[categorical_cols])
-    X_test[categorical_cols] = ordinal_encoder.transform(X_test[categorical_cols])
-
-    # scale numerical features
-    scl = StandardScaler()
-    X_train[numerical_cols] = scl.fit_transform(X_train[numerical_cols])
-    X_val[numerical_cols] = scl.transform(X_val[numerical_cols])
-    X_test[numerical_cols] = scl.transform(X_test[numerical_cols])"""
-
-    # modelling
-    # lightGBM
-    # gbm_model = LGBMRegressor(random_state=42)
-    # gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
-
-    # y_pred_train = gbm_model.predict(X_train)
     gbm_model = ModelFactory.lgbm_regressor()
+    cat_features_indices = [X_train.columns.get_loc(c) for c in COLS_CATEGORICAL if c in X_train]
     gbm_model.fit(X_train, y_train)
     y_pred_train = gbm_model.predict(X_train)
 
@@ -240,95 +254,3 @@ if __name__ == '__main__':
     mse = mean_squared_error(y_test, y_pred_test)
 
     print("Test MSE:", mse, "Test r2:", r2_score(y_test, y_pred_test))
-
-    # hyperparameters optimization
-    sampler = optuna.samplers.TPESampler(n_startup_trials=10, seed=42)
-    # Create a study
-    study = optuna.create_study(direction="maximize", sampler=sampler)
-    # Start the optimization run
-    study.optimize(HyperParameterOptimizers.objective, n_trials=50, show_progress_bar=True)
-
-    fig = optuna.visualization.plot_param_importances(study)
-    fig.show()
-
-    bo_search_trials = study.trials_dataframe()
-    best_params = study.best_params
-    best_score = study.best_value
-    print(bo_search_trials.sort_values("value").head())
-    print(f"Best parameters: {best_params}")
-    print(f"Best score: {best_score}")
-
-    # train with best parameters
-    gbm_model = ModelFactory.lgbm_regressor(**best_params)  # LGBMRegressor(random_state=42, **best_params)
-    start = time.time()
-    gbm_model.fit(X_train, y_train)
-    end = time.time()
-    print(f"Training time: {end - start} seconds")
-
-    start = time.time()
-    y_pred_train = gbm_model.predict(X_train)
-    end = time.time()
-    mse = mean_squared_error(y_train, y_pred_train)
-    print("Train MSE:", mse, "Train r2:", r2_score(y_train, y_pred_train), f"Prediction time: {end - start} seconds")
-
-    start = time.time()
-    y_pred_val = gbm_model.predict(X_val)
-    end = time.time()
-    mse = mean_squared_error(y_val, y_pred_val)
-    print("Validation MSE:", mse, "Validation r2:", r2_score(y_val, y_pred_val),
-          f"Prediction time: {end - start} seconds")
-
-    start = time.time()
-    y_pred_test = gbm_model.predict(X_test)
-    end = time.time()
-    mse = mean_squared_error(y_test, y_pred_test)
-    print("Test MSE:", mse, "Test r2:", r2_score(y_test, y_pred_test), f"Prediction time: {end - start} seconds")
-
-    """
-    Cross validation
-    We concatenate the train and validation sets to perform cross-validation on the whole dataset.
-    """
-    # gbm_model = LGBMRegressor(random_state=42, **best_params)
-    gbm_model = ModelFactory.lgbm_regressor(**best_params)
-
-    X_train_cross_val, y_train_cross_val = pd.concat([X_train, X_val]), pd.concat([y_train, y_val])
-
-    # Define the cross-validation strategy
-    cv_strategy = KFold(n_splits=5, shuffle=True, random_state=42)
-
-    # Perform cross-validation for R² score
-    r2_scores = cross_val_score(gbm_model, X_train_cross_val, y_train_cross_val, cv=cv_strategy,
-                                fit_params={'categorical_feature': set(categorical_cols)})
-
-    # Calculate mean and standard deviation of R² scores
-    r2_mean = np.mean(r2_scores)
-    r2_std = np.std(r2_scores)
-
-    # Perform cross-validation for MSE
-    mse_scores = cross_val_score(gbm_model, X_train, y_train, scoring='neg_mean_squared_error', cv=cv_strategy,
-                                 fit_params={'categorical_feature': set(categorical_cols)})
-
-    # Calculate mean and standard deviation of MSE scores
-    mse_mean = np.mean(-mse_scores)  # Negate the scores back to positive
-    mse_std = np.std(-mse_scores)  # Negate the scores back to positive
-
-    print(f"Mean cross-validation R²: {r2_mean:.3f} +/- {r2_std:.3f}")
-    print(f"Mean cross-validation MSE: {mse_mean:.3f} +/- {mse_std:.3f}")
-
-    """
-    Final evaluation
-    We train the model on the whole dataset and evaluate it on the test set, to get the final performance metrics
-    """
-    gbm_model.fit(X_train_cross_val, y_train_cross_val, categorical_feature=set(categorical_cols))
-    y_pred_test = gbm_model.predict(X_test)
-    mse = mean_squared_error(y_test, y_pred_test)
-
-    print("Test MSE:", mse, "Test r2:", r2_score(y_test, y_pred_test))
-
-    """
-    Explainability
-    Gradient boosting models have a feature_importances_ attribute that can be used to get the relative importance of 
-    each feature. When using PCA, the interpretability is more limited, as the features are linear 
-    combinations of the original features.
-    """
-    ModelFactory.explain()

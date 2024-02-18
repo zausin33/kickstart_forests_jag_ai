@@ -34,7 +34,7 @@ class Dataset:
         """
         :return: the full data frame for this dataset (including the class column)
         """
-        df = pd.read_csv(config.csv_data_path(self.data_filename))
+        df = pd.read_csv(config.csv_data_path(self.data_filename), index_col=0)
         if self.num_samples is not None:
             df = df.sample(self.num_samples, random_state=self.random_seed)
         return df
@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     # modelling
         # lightGBM
-    gbm_model = LGBMRegressor(random_state=42)
+    gbm_model = LGBMRegressor(random_state=42, verbose=-1)
     gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
 
     y_pred_train = gbm_model.predict(X_train)
@@ -168,7 +168,7 @@ if __name__ == '__main__':
         }
 
     def objective(trial: optuna.Trial):
-        gbm_model = LGBMRegressor()
+        gbm_model = LGBMRegressor(verbose=-1)
         params = param_bounds(trial)
         gbm_model.set_params(**params)
 
@@ -194,7 +194,7 @@ if __name__ == '__main__':
     print(f"Best score: {best_score}")
 
     # train with best parameters
-    gbm_model = LGBMRegressor(random_state=42, **best_params)
+    gbm_model = LGBMRegressor(random_state=42, verbose=-1, **best_params)
     start = time.time()
     gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
     end = time.time()
@@ -223,7 +223,7 @@ if __name__ == '__main__':
     Cross validation
     We concatenate the train and validation sets to perform cross-validation on the whole dataset.
     """
-    gbm_model = LGBMRegressor(random_state=42, **best_params)
+    gbm_model = LGBMRegressor(random_state=42, verbose=-1, **best_params)
 
     X_train_cross_val, y_train_cross_val = pd.concat([X_train, X_val]), pd.concat([y_train, y_val])
 
