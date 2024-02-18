@@ -1,5 +1,8 @@
 import numpy as np
 import optuna
+from sklearn.feature_selection import SelectPercentile, chi2
+from sklearn.impute import SimpleImputer
+
 import config
 import pandas as pd
 from lightgbm import LGBMRegressor
@@ -7,17 +10,21 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import cross_val_score, KFold
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 import matplotlib.pyplot as plt
 import seaborn as sns
 import time
 from sklearn.decomposition import PCA
 
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any
 import warnings
+
 warnings.filterwarnings('ignore', category=UserWarning)
 
 LEAF_AREA_INDEX = 'lai'
 LEAF_ID = 'id'
+
 
 class Dataset:
     def __init__(self, num_samples: Optional[int] = None, random_seed: int = 42,
@@ -48,9 +55,87 @@ class Dataset:
         df = self.load_data_frame()
         return df.drop(columns=[LEAF_AREA_INDEX], axis=1), df[LEAF_AREA_INDEX]
 
-class RegressionEvaluator:
-    def __init__(self):
+
+class ModelFactory:
+    def __scaleEncodePipeline(self) -> Pipeline:
+        categorical_cols = [col for col in X.columns if X[col].dtype == 'object']
+        numerical_cols = [col for col in X.columns if col not in categorical_cols + [LEAF_ID, LEAF_AREA_INDEX]]
+
+        numeric_transformer = Pipeline(
+            steps=[("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]
+        )
+        categorical_transformer = Pipeline(
+            steps=[
+                ("encoder", OneHotEncoder(handle_unknown="ignore")),
+                ("selector", SelectPercentile(chi2, percentile=50)),
+            ]
+        )
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ("num", numeric_transformer, numerical_cols),
+                ("cat", categorical_transformer, categorical_cols),
+            ]
+        )
+        return preprocessor
+    @classmethod
+    def explain(cls):
+        feat_df = pd.DataFrame(
+            {
+                "feature": X_train.columns,
+                "importance": gbm_model.feature_importances_.ravel(),
+            }
+        )
+
+        feat_df["_abs_imp"] = np.abs(feat_df.importance)
+        feat_df = feat_df.sort_values("_abs_imp", ascending=False).drop(
+            columns="_abs_imp"
+        )
+
+        feat_df = feat_df.sort_values(by="importance", ascending=False).head(15)
+        feat_df.plot(x="feature", y="importance", kind="bar", color="blue", )
+
+    @classmethod
+    def lgbm_regressor(cls, best_params = None) -> Pipeline:
+        preprocessor = cls.__scaleEncodePipeline()
+        return Pipeline([
+            ("preprocessor", preprocessor),
+            ("model", LGBMRegressor(random_state=42, best_params=best_params))])
+
+    @classmethod
+    def lgbmRegressorCV(cls) -> Pipeline:
         pass
+
+class HyperParameterOptimizers:
+    @classmethod
+    def param_bounds(cls, trial: optuna.Trial):
+        return {
+            # Sample an integer between 10 and 100
+            "n_estimators": trial.suggest_categorical("n_estimators", [50, 100, 200, 300, 400, 500, 700, 1000]),
+            "num_leaves": trial.suggest_int("num_leaves", 10, 100),
+            "max_depth": trial.suggest_int("max_depth", 10, 100),
+            # Sample a categorical value from the list provided
+            "objective": trial.suggest_categorical(
+                "objective", ["regression", "regression_l1", "huber"]
+            ),
+            "random_state": [42],
+            # Sample from a uniform distribution between 0.3 and 1.0
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.3, 1.0),
+            # Sample from a uniform distribution between 0 and 10
+            "reg_alpha": trial.suggest_float("reg_alpha", 0, 100),
+            # Sample from a uniform distribution between 0 and 10
+            "reg_lambda": trial.suggest_float("reg_lambda", 0, 100),
+        }
+
+    @classmethod
+    def objective(cls, trial: optuna.Trial):
+        gbm_model = LGBMRegressor()
+        params = cls.param_bounds(trial)
+        gbm_model.set_params(**params)
+
+        gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
+
+        return gbm_model.score(X_val, y_val)
+
 
 if __name__ == '__main__':
     data = Dataset()
@@ -121,7 +206,7 @@ if __name__ == '__main__':
     print(X_train)
 
     # encode categorical features
-    ordinal_encoder = OrdinalEncoder()
+    """ordinal_encoder = OrdinalEncoder()
     X_train[categorical_cols] = ordinal_encoder.fit_transform(X_train[categorical_cols])
     X_val[categorical_cols] = ordinal_encoder.transform(X_val[categorical_cols])
     X_test[categorical_cols] = ordinal_encoder.transform(X_test[categorical_cols])
@@ -130,14 +215,18 @@ if __name__ == '__main__':
     scl = StandardScaler()
     X_train[numerical_cols] = scl.fit_transform(X_train[numerical_cols])
     X_val[numerical_cols] = scl.transform(X_val[numerical_cols])
-    X_test[numerical_cols] = scl.transform(X_test[numerical_cols])
+    X_test[numerical_cols] = scl.transform(X_test[numerical_cols])"""
 
     # modelling
-        # lightGBM
-    gbm_model = LGBMRegressor(random_state=42)
-    gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
+    # lightGBM
+    # gbm_model = LGBMRegressor(random_state=42)
+    # gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
 
+    # y_pred_train = gbm_model.predict(X_train)
+    gbm_model = ModelFactory.lgbm_regressor()
+    gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
     y_pred_train = gbm_model.predict(X_train)
+
     mse = mean_squared_error(y_train, y_pred_train)
 
     print("Train MSE:", mse, "Train r2:", r2_score(y_train, y_pred_train))
@@ -153,40 +242,11 @@ if __name__ == '__main__':
     print("Test MSE:", mse, "Test r2:", r2_score(y_test, y_pred_test))
 
     # hyperparameters optimization
-    def param_bounds(trial: optuna.Trial):
-        return {
-            # Sample an integer between 10 and 100
-            "n_estimators": trial.suggest_categorical("n_estimators", [50, 100, 200, 300, 400, 500, 700, 1000]),
-            "num_leaves": trial.suggest_int("num_leaves", 10, 100),
-            "max_depth": trial.suggest_int("max_depth", 10, 100),
-            # Sample a categorical value from the list provided
-            "objective": trial.suggest_categorical(
-                "objective", ["regression", "regression_l1", "huber"]
-            ),
-            "random_state": [42],
-            # Sample from a uniform distribution between 0.3 and 1.0
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.3, 1.0),
-            # Sample from a uniform distribution between 0 and 10
-            "reg_alpha": trial.suggest_float("reg_alpha", 0, 100),
-            # Sample from a uniform distribution between 0 and 10
-            "reg_lambda": trial.suggest_float("reg_lambda", 0, 100),
-        }
-
-    def objective(trial: optuna.Trial):
-        gbm_model = LGBMRegressor()
-        params = param_bounds(trial)
-        gbm_model.set_params(**params)
-
-        gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
-
-        return gbm_model.score(X_val, y_val)
-
-
     sampler = optuna.samplers.TPESampler(n_startup_trials=10, seed=42)
     # Create a study
     study = optuna.create_study(direction="maximize", sampler=sampler)
     # Start the optimization run
-    study.optimize(objective, n_trials=50, show_progress_bar=True)
+    study.optimize(HyperParameterOptimizers.objective, n_trials=50, show_progress_bar=True)
 
     fig = optuna.visualization.plot_param_importances(study)
     fig.show()
@@ -199,7 +259,7 @@ if __name__ == '__main__':
     print(f"Best score: {best_score}")
 
     # train with best parameters
-    gbm_model = LGBMRegressor(random_state=42, **best_params)
+    gbm_model = ModelFactory.lgbm_regressor(**best_params)  # LGBMRegressor(random_state=42, **best_params)
     start = time.time()
     gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
     end = time.time()
@@ -228,7 +288,8 @@ if __name__ == '__main__':
     Cross validation
     We concatenate the train and validation sets to perform cross-validation on the whole dataset.
     """
-    gbm_model = LGBMRegressor(random_state=42, **best_params)
+    # gbm_model = LGBMRegressor(random_state=42, **best_params)
+    gbm_model = ModelFactory.lgbm_regressor(**best_params)
 
     X_train_cross_val, y_train_cross_val = pd.concat([X_train, X_val]), pd.concat([y_train, y_val])
 
@@ -270,17 +331,4 @@ if __name__ == '__main__':
     each feature. When using PCA, the interpretability is more limited, as the features are linear 
     combinations of the original features.
     """
-    feat_df = pd.DataFrame(
-        {
-            "feature": X_train.columns,
-            "importance": gbm_model.feature_importances_.ravel(),
-        }
-    )
-
-    feat_df["_abs_imp"] = np.abs(feat_df.importance)
-    feat_df = feat_df.sort_values("_abs_imp", ascending=False).drop(
-        columns="_abs_imp"
-    )
-
-    feat_df = feat_df.sort_values(by="importance", ascending=False).head(15)
-    feat_df.plot(x="feature", y="importance", kind="bar", color="blue", )
+    ModelFactory.explain()
