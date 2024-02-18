@@ -205,7 +205,7 @@ if __name__ == '__main__':
 
     print(X_train)
 
-    # encode categorical features
+    # encode categorical features - NOT NEEDED, COVERED in the pipeline in the ModelFactory class
     """ordinal_encoder = OrdinalEncoder()
     X_train[categorical_cols] = ordinal_encoder.fit_transform(X_train[categorical_cols])
     X_val[categorical_cols] = ordinal_encoder.transform(X_val[categorical_cols])
@@ -224,7 +224,7 @@ if __name__ == '__main__':
 
     # y_pred_train = gbm_model.predict(X_train)
     gbm_model = ModelFactory.lgbm_regressor()
-    gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
+    gbm_model.fit(X_train, y_train)
     y_pred_train = gbm_model.predict(X_train)
 
     mse = mean_squared_error(y_train, y_pred_train)
@@ -261,7 +261,7 @@ if __name__ == '__main__':
     # train with best parameters
     gbm_model = ModelFactory.lgbm_regressor(**best_params)  # LGBMRegressor(random_state=42, **best_params)
     start = time.time()
-    gbm_model.fit(X_train, y_train, categorical_feature=set(categorical_cols))
+    gbm_model.fit(X_train, y_train)
     end = time.time()
     print(f"Training time: {end - start} seconds")
 
