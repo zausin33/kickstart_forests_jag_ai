@@ -24,6 +24,7 @@ class FeatureGeneratorWavelengthDimensionalityReduction(FeatureGenerator):
         self.cols = None
 
     def _fit(self, x: pd.DataFrame, y: pd.DataFrame = None, ctx=None):
+        # NOTE: self.pca.fit(x) would have been sufficient, in conjunction with self.pca.get_feature_names_out() to determine shape
         transformed_data = self.pca.fit_transform(x)
         self.cols = [f"PCA_{i + 1}" for i in range(transformed_data.shape[1])]
 
@@ -33,17 +34,28 @@ class FeatureGeneratorWavelengthDimensionalityReduction(FeatureGenerator):
         return pd.DataFrame(transformed_data, index=df.index, columns=self.cols)
 
 
+# NOTE: This uses a single instance, i.e. if multiple models are trained in succession, they all share the same instance, i.e.
+#   the models that were trained earlier will get their component retrained by the later learning processes, which can be highly
+#   problematic, especially if we were to work with multiple splits of the data.
 numeric_transformer = FeatureGeneratorFromDFT(
     DFTSkLearnTransformer(Pipeline(steps=[("imputer", SimpleImputer(strategy="median"))])),
     normalisation_rule_template=DFTNormalisation.RuleTemplate(skip=True)
 )
 
+# We could have used this instead:
+class FeatureGeneratorImputeMedian(FeatureGeneratorFromDFT):
+    def __init__(self):
+        super().__init__(DFTSkLearnTransformer(SimpleImputer(strategy="median")),
+            normalisation_rule_template=DFTNormalisation.RuleTemplate(skip=True))
+
 
 registry = FeatureGeneratorRegistry()
+# NOTE: Name `WAVELENGTH` is misleading, as sentinel values are also included
 registry.register_factory(FeatureName.WAVELENGTH,
                           lambda: ChainedFeatureGenerator([
+                                # NOTE: normalisation rule for generator which is not the last in the chain has no effect.
                                 FeatureGeneratorTakeColumns(COLS_SENTINEL + COLS_WAVELENGTH, normalisation_rule_template=DFTNormalisation.RuleTemplate(skip=True)),
-                                numeric_transformer,
+                                numeric_transformer,  # FeatureGeneratorImputeMedian()
                                 FeatureGeneratorWavelengthDimensionalityReduction()
                           ]))
 

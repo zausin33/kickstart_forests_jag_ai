@@ -5,7 +5,6 @@ from sensai.featuregen import FeatureCollector
 from sensai.lightgbm import LightGBMVectorRegressionModel
 from sklearn.preprocessing import StandardScaler
 
-from .data import COLS_NUMERICAL, COLS_CATEGORICAL
 from .features import registry, FeatureName
 
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -21,12 +20,12 @@ class ModelFactory:
 
         return LightGBMVectorRegressionModel(random_state=42, verbose=-1,
                                              **(model_params or {})) \
-            .with_feature_collector(fc).with_feature_transformers(
-            fc.create_dft_one_hot_encoder(),
-            fc.create_feature_transformer_normalisation(),
-            DFTSkLearnTransformer(StandardScaler())) \
+            .with_feature_collector(fc) \
+            .with_feature_transformers(
+                fc.create_dft_one_hot_encoder(),
+                fc.create_feature_transformer_normalisation(),
+                DFTSkLearnTransformer(StandardScaler())) \
             .with_name("LightGBM")
-
 
     """"@classmethod
     def explain(cls):
