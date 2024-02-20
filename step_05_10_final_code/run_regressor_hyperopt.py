@@ -45,15 +45,18 @@ def run_hyperopt(dataset: Dataset, model: Literal["lgbm"] = "lgbm", hours=2):
         }
 
         def create_model(search_space_element: Dict[str, Any]):
-            return ModelFactory.create_lgbm_regressor(
-                verbosity=0,
-                num_leaves=search_space_element['num_leaves'],
-                learning_rate=search_space_element['learning_rate'],
-                n_estimators=search_space_element['n_estimators'],
-                max_depth=search_space_element['max_depth'],
-                reg_alpha=search_space_element['reg_alpha'],
-                reg_lambda=search_space_element['reg_lambda'],
-                min_split_gain=search_space_element['min_split_gain'])
+            model_params = {
+            'verbosity': 0,
+            'num_leaves': search_space_element['num_leaves'],
+            'learning_rate': search_space_element['learning_rate'],
+            'n_estimators': search_space_element['n_estimators'],
+            'max_depth': search_space_element['max_depth'],
+            'reg_alpha': search_space_element['reg_alpha'],
+            'reg_lambda': search_space_element['reg_lambda'],
+            'min_split_gain': search_space_element['min_split_gain']
+            }
+            return ModelFactory.create_lgbm_regressor(model_params=model_params)
+
 
         warnings.filterwarnings("ignore")
     else:
