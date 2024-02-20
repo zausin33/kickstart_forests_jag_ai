@@ -1,9 +1,11 @@
 import warnings
 from typing import Sequence, Optional
 
+
 from sensai.data_transformation import DFTSkLearnTransformer
 from sensai.featuregen import FeatureCollector
 from sensai.lightgbm import LightGBMVectorRegressionModel
+from sensai.sklearn.sklearn_regression import SkLearnSVRVectorRegressionModel
 from sklearn.preprocessing import StandardScaler
 
 from .data import COLS_NUMERICAL, COLS_CATEGORICAL
@@ -13,7 +15,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 
 class ModelFactory:
-    DEFAULT_FEATURES = (FeatureName.WETNESS, FeatureName.CATEGORICAL, FeatureName.WAVELENGTH)
+    DEFAULT_FEATURES = (FeatureName.WETNESS, FeatureName.CATEGORICAL, FeatureName.WAVELENGTH_DIM_REDUCTION)
 
 
     @classmethod
@@ -25,8 +27,7 @@ class ModelFactory:
 
         return LightGBMVectorRegressionModel(min_child_weight=min_child_weight, **kwargs) \
             .with_feature_collector(fc).with_feature_transformers(
-            fc.create_dft_one_hot_encoder(),
-            fc.create_feature_transformer_normalisation(),
+            fc.create_feature_transformer_normalisation(require_all_handled=False),
             DFTSkLearnTransformer(StandardScaler())) \
             .with_name(f"LightGBM{name_suffix}")
 
@@ -58,3 +59,14 @@ class ModelFactory:
 
         feat_df = feat_df.sort_values(by="importance", ascending=False).head(15)
         feat_df.plot(x="feature", y="importance", kind="bar", color="blue", )"""
+
+    def create_svr(cls, name_suffix="", features: Sequence[FeatureName] = DEFAULT_FEATURES, model_params=None) -> SkLearnSVRVectorRegressionModel:
+        fc = FeatureCollector(*features, registry=registry)
+        name_suffix = f"_{name_suffix}" if name_suffix else ""
+
+        return SkLearnSVRVectorRegressionModel(**(model_params or {})) \
+            .with_feature_collector(fc) \
+            .with_feature_transformers(
+            fc.create_feature_transformer_one_hot_encoder(ignore_unknown=True),
+            fc.create_feature_transformer_normalisation(require_all_handled=False)) \
+            .with_name(f"SVR{name_suffix}")
