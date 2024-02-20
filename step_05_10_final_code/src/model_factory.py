@@ -19,11 +19,10 @@ class ModelFactory:
     def create_lgbm_regressor(cls, model_params=None) -> LightGBMVectorRegressionModel:
         fc = FeatureCollector(*cls.DEFAULT_FEATURES, registry=registry)
 
-        return LightGBMVectorRegressionModel(random_state=42, verbose=-1,
+        return LightGBMVectorRegressionModel(random_state=42, verbose=-1, categorical_feature_names=COLS_CATEGORICAL,
                                              **(model_params or {})) \
             .with_feature_collector(fc).with_feature_transformers(
-            fc.create_dft_one_hot_encoder(),
-            fc.create_feature_transformer_normalisation(),
+            fc.create_feature_transformer_normalisation(require_all_handled=False),
             DFTSkLearnTransformer(StandardScaler())) \
             .with_name("LightGBM")
 

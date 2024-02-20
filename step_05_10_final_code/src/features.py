@@ -62,6 +62,12 @@ numeric_transformer = FeatureGeneratorFromDFT(
     DFTSkLearnTransformer(Pipeline(steps=[("imputer", SimpleImputer(strategy="median"))]))
 )
 
+ordinal_transformer = FeatureGeneratorFromDFT(
+    DFTSkLearnTransformer(Pipeline(steps=[("ordinal", OrdinalEncoder())])),
+    add_categorical_default_rules=False,
+    categorical_feature_names=COLS_CATEGORICAL
+)
+
 
 registry = FeatureGeneratorRegistry()
 registry.register_factory(FeatureName.WAVELENGTH,
@@ -71,10 +77,10 @@ registry.register_factory(FeatureName.WAVELENGTH,
                                 FeatureGeneratorWavelengthDimensionalityReduction()
                           ]))
 
-registry.register_factory(FeatureName.CATEGORICAL, lambda: FeatureGeneratorTakeColumns(
-    COLS_CATEGORICAL,
-    categorical_feature_names=COLS_CATEGORICAL
-))
+registry.register_factory(FeatureName.CATEGORICAL, lambda: ChainedFeatureGenerator([
+    FeatureGeneratorTakeColumns(COLS_CATEGORICAL),
+    ordinal_transformer
+]))
 
 registry.register_factory(FeatureName.WETNESS, lambda: FeatureGeneratorTakeColumns(COL_WETNESS,
     normalisation_rule_template=DFTNormalisation.RuleTemplate(
