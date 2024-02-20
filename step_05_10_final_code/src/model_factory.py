@@ -1,4 +1,5 @@
 import warnings
+from typing import Sequence, Optional
 
 from sensai.data_transformation import DFTSkLearnTransformer
 from sensai.featuregen import FeatureCollector
@@ -16,16 +17,18 @@ class ModelFactory:
 
 
     @classmethod
-    def create_lgbm_regressor(cls, model_params=None) -> LightGBMVectorRegressionModel:
-        fc = FeatureCollector(*cls.DEFAULT_FEATURES, registry=registry)
+    def create_lgbm_regressor(cls, name_suffix="", features: Sequence[FeatureName] = DEFAULT_FEATURES,
+                   add_features: Sequence[FeatureName] = (),
+                   min_child_weight: Optional[float] = None, **kwargs) -> LightGBMVectorRegressionModel:
+        # fc = FeatureCollector(*cls.DEFAULT_FEATURES, registry=registry)
+        fc = FeatureCollector(*features, *add_features, registry=registry)
 
-        return LightGBMVectorRegressionModel(random_state=42, verbose=-1,
-                                             **(model_params or {})) \
+        return LightGBMVectorRegressionModel(min_child_weight=min_child_weight, **kwargs) \
             .with_feature_collector(fc).with_feature_transformers(
             fc.create_dft_one_hot_encoder(),
             fc.create_feature_transformer_normalisation(),
             DFTSkLearnTransformer(StandardScaler())) \
-            .with_name("LightGBM")
+            .with_name(f"LightGBM{name_suffix}")
 
 
     """"@classmethod
