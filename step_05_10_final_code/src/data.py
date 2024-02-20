@@ -26,6 +26,8 @@ class Dataset(ToStringMixin):
     def __init__(self, num_samples: Optional[int] = None, random_seed: int = 42,
                  data_filename: str = 'RtmSimulation_kickstart.csv'):
         """
+        The dataset for the leaf area index (LAI) prediction problem.
+
         :param num_samples: the number of samples to draw from the data frame; if None, use all samples
         :param random_seed: the random seed to use when sampling data points
         :param data_filename: the filename of file containing the dataset
