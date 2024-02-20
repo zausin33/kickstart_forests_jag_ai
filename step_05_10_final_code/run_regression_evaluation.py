@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 def main():
     # define & load dataset
     dataset = Dataset()
-    use_cross_validation = True
+    use_cross_validation = False
 
     experiment_name = TagBuilder("lai_regression_", dataset.tag()).with_conditional(use_cross_validation, "CV").build()
     run_id = datetime_tag()
