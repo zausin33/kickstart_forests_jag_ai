@@ -28,7 +28,8 @@ def main():
 
     # define models to be evaluated
     models = [
-        ModelFactory.create_lgbm_regressor()
+        ModelFactory.create_lgbm_regressor(),
+        ModelFactory.create_lgbm_wavelength_opt()
     ]
 
     # declare parameters to be used for evaluation, i.e. how to split the data (fraction and random seed)

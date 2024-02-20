@@ -30,6 +30,17 @@ class ModelFactory:
             DFTSkLearnTransformer(StandardScaler())) \
             .with_name(f"LightGBM{name_suffix}")
 
+    @classmethod
+    def create_lgbm_wavelength_opt(cls):
+        params = {
+            'colsample_bytree': 0.9428047884327909,
+            'gamma': 0.23886800503364314,
+            'max_depth': 10,
+            'min_child_weight': 15,
+            'num_leaves': 37,
+            'reg_lambda': 0.6598013723009393
+        }
+        return cls.create_lgbm_regressor("-wavelength-opt", add_features=[FeatureName.WAVELENGTH], **params)
 
     """"@classmethod
     def explain(cls):

@@ -26,7 +26,7 @@ def run_hyperopt(dataset: Dataset, model: Literal["lgbm"] = "lgbm", hours=2):
     if model == "lgbm":
         initial_space = [
             {
-                # 'num_leaves': 31,
+                'num_leaves': 31,
                 'max_depth': 6,
                 'gamma': 0,
                 'reg_lambda': 0,
@@ -35,7 +35,7 @@ def run_hyperopt(dataset: Dataset, model: Literal["lgbm"] = "lgbm", hours=2):
             }
         ]
         search_space = {
-            # 'num_leaves': hp.quniform('num_leaves'),
+            'num_leaves': hp.uniformint('num_leaves', 20, 40),
             'max_depth': hp.uniformint("max_depth", 3, 10),
             'gamma': hp.uniform('gamma', 0, 9),
             'reg_lambda': hp.uniform('reg_lambda', 0, 1),
@@ -44,9 +44,9 @@ def run_hyperopt(dataset: Dataset, model: Literal["lgbm"] = "lgbm", hours=2):
         }
 
         def create_model(search_space_element: Dict[str, Any]):
-            return ModelFactory.create_lgbm_regressor(add_features=[FeatureName.WAVELENGTH],
+            return ModelFactory.create_lgbm_regressor(
                 verbosity=0,
-                # num_leaves=search_space_element['num_leaves'],
+                num_leaves=search_space_element['num_leaves'],
                 max_depth=search_space_element['max_depth'],
                 gamma=search_space_element['gamma'],
                 reg_lambda=search_space_element['reg_lambda'],
