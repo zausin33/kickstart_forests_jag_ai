@@ -3,7 +3,7 @@ from typing import Tuple, Optional
 
 import pandas as pd
 from sensai import InputOutputData
-from sensai.util.string import ToStringMixin
+from sensai.util.string import ToStringMixin, TagBuilder
 
 import config
 
@@ -33,6 +33,12 @@ class Dataset(ToStringMixin):
         self.num_samples = num_samples
         self.random_seed = random_seed
         self.data_filename = data_filename
+
+    def tag(self):
+        return TagBuilder(glue="-") \
+            .with_alternative(self.num_samples is None, "full", f"numSamples{self.num_samples}") \
+            .with_conditional(self.random_seed != 42, f"seed{self.random_seed}") \
+            .build()
 
     def load_data_frame(self) -> pd.DataFrame:
         """

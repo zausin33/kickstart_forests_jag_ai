@@ -10,6 +10,8 @@ from sensai.data_transformation import DFTNormalisation, SkLearnTransformerFacto
 from sensai.featuregen import FeatureGeneratorRegistry, FeatureGeneratorTakeColumns, FeatureGeneratorFromDFT, \
     FeatureGenerator, ChainedFeatureGenerator
 
+log = logging.getLogger(__name__)
+
 
 class FeatureName(Enum):
     WAVELENGTH = "wavelength"
@@ -19,13 +21,16 @@ class FeatureName(Enum):
 
 class FeatureGeneratorWavelengthDimensionalityReduction(FeatureGenerator):
     def __init__(self, n_components=0.96):
-        super().__init__(normalisation_rule_template=DFTNormalisation.RuleTemplate(skip=True))
+        self.rule = DFTNormalisation.Rule(skip=True, regex=None)
+        super().__init__(normalisation_rules=[self.rule])
         self.pca = PCA(n_components=n_components)
         self.cols = None
 
     def _fit(self, x: pd.DataFrame, y: pd.DataFrame = None, ctx=None):
         transformed_data = self.pca.fit_transform(x)
         self.cols = [f"PCA_{i + 1}" for i in range(transformed_data.shape[1])]
+        log.info(f"PCA: {transformed_data.shape[1]} -> {len(self.cols)}")
+        self.rule.set_regex(f"PCA_.*")
 
     def _generate(self, df: pd.DataFrame, ctx=None) -> pd.DataFrame:
         transformed_data = self.pca.transform(df)
@@ -34,15 +39,14 @@ class FeatureGeneratorWavelengthDimensionalityReduction(FeatureGenerator):
 
 
 numeric_transformer = FeatureGeneratorFromDFT(
-    DFTSkLearnTransformer(Pipeline(steps=[("imputer", SimpleImputer(strategy="median"))])),
-    normalisation_rule_template=DFTNormalisation.RuleTemplate(skip=True)
+    DFTSkLearnTransformer(Pipeline(steps=[("imputer", SimpleImputer(strategy="median"))]))
 )
 
 
 registry = FeatureGeneratorRegistry()
 registry.register_factory(FeatureName.WAVELENGTH,
                           lambda: ChainedFeatureGenerator([
-                                FeatureGeneratorTakeColumns(COLS_SENTINEL + COLS_WAVELENGTH, normalisation_rule_template=DFTNormalisation.RuleTemplate(skip=True)),
+                                FeatureGeneratorTakeColumns(COLS_SENTINEL + COLS_WAVELENGTH),
                                 numeric_transformer,
                                 FeatureGeneratorWavelengthDimensionalityReduction()
                           ]))
