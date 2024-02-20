@@ -14,7 +14,9 @@ log = logging.getLogger(__name__)
 
 
 class FeatureName(Enum):
-    WAVELENGTH = "wavelength"
+    WAVELENGTH_DIM_REDUCTION = "wavelength_dim_reduction"
+    ALL_WAVELENGTH = "all_wavelength"
+    SENTINEL = "sentinel"
     CATEGORICAL = "categorical"
     WETNESS = "wetness"
 
@@ -58,7 +60,7 @@ class FeatureGeneratorWavelengthDimensionalityReduction(FeatureGenerator):
         return pd.DataFrame(transformed_data, index=df.index, columns=self.cols)
 
 
-numeric_transformer = FeatureGeneratorFromDFT(
+numeric_transformer = lambda: FeatureGeneratorFromDFT(
     DFTSkLearnTransformer(Pipeline(steps=[("imputer", SimpleImputer(strategy="median"))]))
 )
 
@@ -70,11 +72,23 @@ ordinal_transformer = FeatureGeneratorFromDFT(
 
 
 registry = FeatureGeneratorRegistry()
-registry.register_factory(FeatureName.WAVELENGTH,
+registry.register_factory(FeatureName.WAVELENGTH_DIM_REDUCTION,
                           lambda: ChainedFeatureGenerator([
                                 FeatureGeneratorTakeColumns(COLS_SENTINEL + COLS_WAVELENGTH),
-                                numeric_transformer,
+                                numeric_transformer(),
                                 FeatureGeneratorWavelengthDimensionalityReduction()
+                          ]))
+
+registry.register_factory(FeatureName.SENTINEL,
+                          lambda: ChainedFeatureGenerator([
+                              FeatureGeneratorTakeColumns(COLS_SENTINEL),
+                              numeric_transformer(),
+                          ]))
+
+registry.register_factory(FeatureName.ALL_WAVELENGTH,
+                          lambda: ChainedFeatureGenerator([
+                              FeatureGeneratorTakeColumns(COLS_WAVELENGTH),
+                              numeric_transformer(),
                           ]))
 
 registry.register_factory(FeatureName.CATEGORICAL, lambda: ChainedFeatureGenerator([
