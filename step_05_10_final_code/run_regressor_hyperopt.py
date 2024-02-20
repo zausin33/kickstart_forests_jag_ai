@@ -85,4 +85,4 @@ def run_hyperopt(dataset: Dataset, model: Literal["lgbm"] = "lgbm", hours=2):
     log.info(f"Best trial: {trials.best_trial}")
 
 if __name__ == '__main__':
-    logging.run_main(lambda: run_hyperopt(Dataset(is_classification=False), hours=10))
+    logging.run_main(lambda: run_hyperopt(Dataset(), hours=1))
