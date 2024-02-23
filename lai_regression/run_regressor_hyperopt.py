@@ -23,6 +23,10 @@ log = logging.getLogger(__name__)
 class HyperoptModelConfig(ABC):
 
     @abstractmethod
+    def model_name(self) -> str:
+        pass
+
+    @abstractmethod
     def create_model(self, search_space_element: Dict[str, Any]):
         pass
 
@@ -36,6 +40,9 @@ class HyperoptModelConfig(ABC):
 
 
 class LGBMHyperoptConfig(HyperoptModelConfig):
+
+    def model_name(self) -> str:
+        return "lgbm"
 
     def create_model(self, search_space_element: Dict[str, Any]):
         model_params = {
@@ -76,6 +83,8 @@ class LGBMHyperoptConfig(HyperoptModelConfig):
 
 
 class CatBoostHyperoptConfig(HyperoptModelConfig):
+    def model_name(self) -> str:
+        return "catboost"
 
     def create_model(self, search_space_element: Dict[str, Any]):
         model_params = {
@@ -111,17 +120,10 @@ class CatBoostHyperoptConfig(HyperoptModelConfig):
         }
 
 
-def run_hyperopt(dataset: Dataset, model: Literal["lgbm", "catboost"] = "lgbm", minutes=30):
-    experiment_name = f"{datetime_tag()}-{model}-{dataset.tag()}"
+def run_hyperopt(dataset: Dataset, model_config: HyperoptModelConfig, minutes=30):
+    experiment_name = f"{datetime_tag()}-{model_config.model_name()}-{dataset.tag()}"
     result_writer = ResultWriter(os.path.join("results", "hyperopt", experiment_name))
     logging.add_file_logger(result_writer.path("log.txt"))
-
-    if model == "lgbm":
-        model_config = LGBMHyperoptConfig()
-    elif model == "catboost":
-        model_config = CatBoostHyperoptConfig()
-    else:
-        raise ValueError(f"Model {model} is not supported.")
 
     io_data = dataset.load_io_data()
     metric = RegressionMetricRRSE()
@@ -137,7 +139,7 @@ def run_hyperopt(dataset: Dataset, model: Literal["lgbm", "catboost"] = "lgbm", 
 
     trials_file = result_writer.path("trials.pickle")
     logging.getLogger("sensai").setLevel(logging.WARN)
-    log.info(f"Starting hyperparameter optimisation for {model} and {dataset}")
+    log.info(f"Starting hyperparameter optimisation for {model_config.model_name()} and {dataset}")
     hyperopt.fmin(objective, model_config.search_space(), algo=hyperopt.tpe.suggest, timeout=minutes * 60,
                   show_progressbar=False,
                   trials_save_file=trials_file, points_to_evaluate=model_config.initial_space())
@@ -147,4 +149,4 @@ def run_hyperopt(dataset: Dataset, model: Literal["lgbm", "catboost"] = "lgbm", 
 
 
 if __name__ == '__main__':
-    logging.run_main(lambda: run_hyperopt(Dataset(), model="catboost", minutes=5))
+    logging.run_main(lambda: run_hyperopt(Dataset(), model_config=CatBoostHyperoptConfig(), minutes=5))
