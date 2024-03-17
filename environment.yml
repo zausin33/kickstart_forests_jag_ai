@@ -21,5 +21,8 @@ dependencies:
   - kaggle=1.5.16
   - lightgbm=4.1.0
   - optuna=3.5.0
+  - pandas~=2.1.4
+  - fastapi~=0.103.0
+  - pydantic~=2.5.3
   - pip:
       - sensai==1.0.0b2
