@@ -1,4 +1,5 @@
 import warnings
+from pathlib import Path
 from typing import Sequence, Optional, List
 
 from sensai.catboost import CatBoostVectorRegressionModel
@@ -8,8 +9,13 @@ from sensai.sklearn.sklearn_regression import SkLearnSVRVectorRegressionModel, S
     SkLearnLinearRegressionVectorRegressionModel, SkLearnRandomForestVectorRegressionModel
 
 from .features import registry, FeatureName, PcaWavelengthSentinelFeatureGenerator
+from .data import Dataset
 
 warnings.filterwarnings('ignore', category=UserWarning)
+
+
+def best_regression_model_storage_path(dataset: Dataset) -> Path:
+    return Path("results") / "models" / "regression" / dataset.tag() / "best_model.pickle"
 
 
 class ModelFactory:
