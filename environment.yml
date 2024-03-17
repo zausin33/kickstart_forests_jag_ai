@@ -24,5 +24,6 @@ dependencies:
   - pandas~=2.1.4
   - fastapi~=0.103.0
   - pydantic~=2.5.3
+  - catboost=1.2.3
   - pip:
       - sensai==1.0.0b2
