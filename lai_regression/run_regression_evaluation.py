@@ -11,7 +11,7 @@ from sensai.util.string import TagBuilder
 
 from lai_regression.src.data import Dataset, COL_LEAF_AREA_INDEX
 from lai_regression.src.features import FeatureName
-from lai_regression.src.model_factory import ModelFactory
+from lai_regression.src.model_factory import ModelFactory, best_regression_model_storage_path
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -58,8 +58,8 @@ def main():
 
     # use a high-level utility class for evaluating the models based on these parameters
     ev = RegressionModelEvaluation(io_data, evaluator_params=evaluator_params, cross_validator_params=cross_validator_params)
-    result = ev.compare_models(models, fit_models=True, result_writer=result_writer, use_cross_validation=use_cross_validation)
-
+    result = ev.compare_models(models, fit_models=True, result_writer=result_writer)
+    print('result: ', result)
     # feature importance of best model
     if do_plot_feature_importance and not use_cross_validation:
         best_model = result.get_best_model(RegressionMetricR2.name)
@@ -68,6 +68,13 @@ def main():
             fi = best_model.get_feature_importance()
             fig = fi.plot(predicted_var_name=COL_LEAF_AREA_INDEX)
             fig.savefig(result_writer.path("feature_importance.png"))
+
+    # save_best_model
+    best_model = result.get_best_model(RegressionMetricR2.name)
+    path = best_regression_model_storage_path(dataset)
+    log.info(f"Saving best model '{best_model.get_name()}' in {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    best_model.save(path)
 
 
 
