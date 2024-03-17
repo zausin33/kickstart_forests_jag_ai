@@ -19,5 +19,5 @@ MLFLOW_USERNAME = 'admin'
 MLFLOW_PASSWORD = 'OlFhkMomho8UgHey'
 MLFLOW_EXPERIMENT = "lai_regression"
 
-LAKEFS_REPOSITORY = "ai-kickstart"
-LAKEFS_BRANCH = "main"
+# LAKEFS_REPOSITORY = "ai-kickstart"
+# LAKEFS_BRANCH = "main"

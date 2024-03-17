@@ -1,9 +1,9 @@
 """MLflow session resource."""
 
 import os
-
+from datetime import datetime
 import mlflow
-from dagster import AssetExecutionContext, ConfigurableResource, InitResourceContext
+from dagster import ConfigurableResource
 
 
 class MlflowSession(ConfigurableResource):
@@ -21,7 +21,7 @@ class MlflowSession(ConfigurableResource):
     password: str | None
     experiment: str
 
-    def setup_for_execution(self, context: InitResourceContext) -> None:
+    def setup_for_execution(self) -> None:
         mlflow.set_tracking_uri(self.tracking_url)
         # MLflow expects credentials in environment variables
         if self.username:
@@ -30,11 +30,9 @@ class MlflowSession(ConfigurableResource):
             os.environ["MLFLOW_TRACKING_PASSWORD"] = self.password
         mlflow.set_experiment(self.experiment)
 
-    def get_run(self, context: AssetExecutionContext) -> mlflow.ActiveRun:
-        dagster_run_id = context.run.run_id
-        dagster_asset_key = context.asset_key.to_user_string()
-
-        run_name = f"{dagster_asset_key}-{dagster_run_id}"
+    def get_run(self) -> mlflow.ActiveRun:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        run_name = f"JAG-MLflow-Run-{current_time}"
         active_run = mlflow.active_run()
         if active_run is None:
             current_runs = mlflow.search_runs(
@@ -46,7 +44,7 @@ class MlflowSession(ConfigurableResource):
                 run_id = current_runs[0].info.run_id
                 return mlflow.start_run(run_id=run_id, run_name=run_name)
             else:
-                tags = {"dagster.run_id": dagster_run_id}
+                tags = {"current_runs": False}
                 return mlflow.start_run(run_name=run_name, tags=tags)
 
         return active_run
