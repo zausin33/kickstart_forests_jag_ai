@@ -1,4 +1,4 @@
-# DATA_BASE_DIR = "data"
+DATA_BASE_DIR = "../data/RtmSimulation_kickstart.csv"
 # MODEL_BASE_DIR = "model"
 
 # AMES_HOUSING_DATA_SET_URL = "http://jse.amstat.org/v19n3/decock/AmesHousing.txt"
@@ -19,5 +19,5 @@ MLFLOW_USERNAME = 'admin'
 MLFLOW_PASSWORD = 'OlFhkMomho8UgHey'
 MLFLOW_EXPERIMENT = "lai_regression"
 
-# LAKEFS_REPOSITORY = "ai-kickstart"
-# LAKEFS_BRANCH = "main"
+LAKEFS_REPOSITORY = "ai-kickstart"
+LAKEFS_BRANCH = "main"
