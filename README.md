@@ -33,3 +33,12 @@ Baseline model to predict `lai`.
 Use [conda](https://docs.conda.io/projects/miniconda/en/latest/) to create an environment based on [environment.yml](environment.yml).
 
     conda env create -f environment.yml
+
+## Deployment
+To build the image, execute this from the top-level of the repository
+
+`docker build -t forests-predictor -f lai_regression/app/Dockerfile .`
+
+and to run the container
+
+`docker run -p 80:80 forests-predictor`
