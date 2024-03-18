@@ -24,3 +24,4 @@ dependencies:
   - pip:
       - sensai==1.0.0b2
       - lakefs-spec
+      - mlflow
