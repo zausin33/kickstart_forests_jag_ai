@@ -4,6 +4,7 @@ import warnings
 from sensai.evaluation import RegressionModelEvaluation, RegressionEvaluatorParams, VectorModelCrossValidatorParams
 from sensai.evaluation.eval_stats import RegressionMetricR2
 from sensai.feature_importance import FeatureImportanceProvider
+from sensai.tracking.mlflow_tracking import MLFlowExperiment
 from sensai.util import logging
 from sensai.util.io import ResultWriter
 from sensai.util.logging import datetime_tag
@@ -25,6 +26,8 @@ def main():
 
     experiment_name = TagBuilder("lai_regression_", dataset.tag()).with_conditional(use_cross_validation, "CV").build()
     run_id = datetime_tag()
+    tracked_experiment = MLFlowExperiment(experiment_name, tracking_uri="http://localhost:5000", context_prefix=run_id + "_",
+                                            add_log_to_all_contexts=True)
     result_writer = ResultWriter(os.path.join("results", experiment_name, run_id))
     logging.add_file_logger(result_writer.path("log.txt"))
 
@@ -58,8 +61,9 @@ def main():
 
     # use a high-level utility class for evaluating the models based on these parameters
     ev = RegressionModelEvaluation(io_data, evaluator_params=evaluator_params, cross_validator_params=cross_validator_params)
-    result = ev.compare_models(models, fit_models=True, result_writer=result_writer)
-    print('result: ', result)
+    result = ev.compare_models(models, fit_models=True, result_writer=result_writer,
+                               tracked_experiment=tracked_experiment, use_cross_validation=use_cross_validation)
+
     # feature importance of best model
     if do_plot_feature_importance and not use_cross_validation:
         best_model = result.get_best_model(RegressionMetricR2.name)

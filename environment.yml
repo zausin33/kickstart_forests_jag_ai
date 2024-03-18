@@ -27,3 +27,5 @@ dependencies:
   - catboost=1.2.3
   - pip:
       - sensai==1.0.0b2
+      - lakefs-spec
+      - mlflow

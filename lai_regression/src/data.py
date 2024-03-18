@@ -1,11 +1,8 @@
 import logging
-from typing import Optional
 
 import pandas as pd
 from sensai import InputOutputData
 from sensai.util.string import ToStringMixin, TagBuilder
-
-import config
 
 log = logging.getLogger(__name__)
 
@@ -23,22 +20,32 @@ COLS_NUMERICAL = [COL_WETNESS] + COLS_SENTINEL + COLS_WAVELENGTH
 
 
 class Dataset(ToStringMixin):
-    def __init__(self, num_samples: Optional[int] = None, random_seed: int = 42,
-                 data_filename: str = 'RtmSimulation_kickstart.csv'):
+    def __init__(self,
+                 dataset_filename: str = "RtmSimulation_kickstart.csv",
+                 repository: str = "ai-kickstart",
+                 branch: str = "main",
+                 random_seed: int = 42
+                 ):
         """
         The dataset for the leaf area index (LAI) prediction problem.
 
-        :param num_samples: the number of samples to draw from the data frame; if None, use all samples
+        :param dataset_filename: the name of the dataset file
+        :param repository: the name of the lakeFS repository
+        :param branch: the name of the branch in the lakeFS repository
         :param random_seed: the random seed to use when sampling data points
-        :param data_filename: the filename of file containing the dataset
         """
-        self.num_samples = num_samples
+        self.data_filename = dataset_filename
+        self.repository = repository
+        self.branch = branch
         self.random_seed = random_seed
-        self.data_filename = data_filename
 
     def tag(self):
-        return TagBuilder(glue="-") \
-            .with_alternative(self.num_samples is None, "full", f"numSamples{self.num_samples}") \
+        return TagBuilder(
+            self.data_filename,
+            self.repository,
+            self.branch,
+            glue="-"
+        ) \
             .with_conditional(self.random_seed != 42, f"seed{self.random_seed}") \
             .build()
 
@@ -46,10 +53,9 @@ class Dataset(ToStringMixin):
         """
         :return: the full data frame for this dataset (including the class column)
         """
-        log.info(f"Loading {self} from {self.data_filename}")
-        df = pd.read_csv(config.csv_data_path(self.data_filename), index_col=0)
-        if self.num_samples is not None:
-            df = df.sample(self.num_samples, random_state=self.random_seed)
+        path = f"lakefs://{self.repository}/{self.branch}/{self.data_filename}"
+        log.info(f"Loading {self} from {path}")
+        df = pd.read_csv(path, index_col=0)
         return df
 
     def load_io_data(self) -> InputOutputData:
