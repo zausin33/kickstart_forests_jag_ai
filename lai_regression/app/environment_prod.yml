@@ -58,6 +58,7 @@ dependencies:
   - uvicorn=0.23.2
   - wheel=0.41.1
   - xz=5.2.6
+  - catboost=1.2.3
   - pip:
       - contourpy==1.1.0
       - cycler==0.11.0

@@ -5,8 +5,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y gcc python3-dev
 
 # Copy the environment file
-COPY environment.yml /app/environment-prod.yml
-RUN mamba env create -f environment-prod.yml
+COPY lai_regression/app/environment_prod.yml /app/environment_prod.yml
+RUN mamba env create -f environment_prod.yml
 
 
 # Stage 2: Copy necessary artifacts and set up runtime
@@ -15,7 +15,7 @@ FROM condaforge/mambaforge
 WORKDIR /app
 
 # Copy environment from the builder stage
-COPY --from=builder /opt/conda/envs/kickstart_forests_jag_ai /opt/conda/envs/kickstart_forests_jag_ai_prod
+COPY --from=builder /opt/conda/envs/kickstart_forests_jag_ai_prod /opt/conda/envs/kickstart_forests_jag_ai_prod
 
 # Set up environment variables
 # Adjusting the path for the model pickle
