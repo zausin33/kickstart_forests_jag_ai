@@ -12,7 +12,7 @@ from sensai.util.string import TagBuilder
 
 from lai_regression.src.data import Dataset, COL_LEAF_AREA_INDEX
 from lai_regression.src.features import FeatureName
-from lai_regression.src.model_factory import ModelFactory
+from lai_regression.src.model_factory import ModelFactory, best_regression_model_storage_path
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -72,6 +72,13 @@ def main():
             fi = best_model.get_feature_importance()
             fig = fi.plot(predicted_var_name=COL_LEAF_AREA_INDEX)
             fig.savefig(result_writer.path("feature_importance.png"))
+
+    # save_best_model
+    best_model = result.get_best_model(RegressionMetricR2.name)
+    path = best_regression_model_storage_path(dataset)
+    log.info(f"Saving best model '{best_model.get_name()}' in {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    best_model.save(path)
 
 
 
