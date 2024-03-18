@@ -3,7 +3,8 @@ import os
 
 import pandas as pd
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
+from lai_regression.src import data
 
 script_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -15,22 +16,13 @@ with open(model_path, 'rb') as f:
     model = pickle.load(f)
 
 
-class PredictionInput(BaseModel):
-    id: int
-    lai: float
-    wetness: float
-    treeSpecies: str
-    """Sentinel_2A_492.4: float
-    Sentinel_2A_559.8: float
-    Sentinel_2A_664.6: float
-    Sentinel_2A_704.1: float
-    Sentinel_2A_740.5: float
-    Sentinel_2A_782.8: float
-    Sentinel_2A_832.8: float
-    Sentinel_2A_864.7: float
-    Sentinel_2A_1613.7: float
-    Sentinel_2A_2202.4: float"""
-
+# Use create_model to dynamically create the Pydantic model
+PredictionInput = create_model(
+    'PredictionInput',
+    __base__=BaseModel,
+    **{name: (float, ...) for name in data.COLS_NUMERICAL},
+    **{name: (str, ...) for name in data.COLS_CATEGORICAL},
+)
 
 @app.get("/model_info/")
 def model_info():
