@@ -10,9 +10,8 @@ COL_LEAF_AREA_INDEX = 'lai'
 COL_ID = 'id'
 COL_WETNESS = 'wetness'
 COL_TREE_SPECIES = 'treeSpecies'
-COLS_SENTINEL = ["Sentinel_2A_492.4", "Sentinel_2A_559.8", "Sentinel_2A_664.6", "Sentinel_2A_704.1",
-                 "Sentinel_2A_740.5", "Sentinel_2A_782.8", "Sentinel_2A_832.8", "Sentinel_2A_864.7",
-                 "Sentinel_2A_1613.7", "Sentinel_2A_2202.4"]
+COLS_SENTINEL = ["Sentinel_2A_B2", "Sentinel_2A_B3", "Sentinel_2A_B4", "Sentinel_2A_B5", "Sentinel_2A_B6",
+                 "Sentinel_2A_B7", "Sentinel_2A_B8", "Sentinel_2A_B8a", "Sentinel_2A_B11", "Sentinel_2A_B12"]
 COLS_WAVELENGTH = [f"w{wavelength}" for wavelength in range(400, 2501)]
 
 COLS_CATEGORICAL = [COL_TREE_SPECIES]

@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 
 class ModelFactory:
-    DEFAULT_FEATURES = [FeatureName.WETNESS, FeatureName.TREE_SPECIES, FeatureName.PCA_WAVELENGTHS_SENTINEL]
+    DEFAULT_FEATURES = [FeatureName.WETNESS, FeatureName.TREE_SPECIES, FeatureName.SENTINEL]
 
     @classmethod
     def create_mean_model(cls):
@@ -52,6 +52,19 @@ class ModelFactory:
             .with_name(f"LightGBM{name_suffix}")
 
     @classmethod
+    def create_lgbm_regressor_hyperopt(cls):
+        return cls.create_lgbm_regressor(
+            name_suffix="hyperopt",
+            num_leaves=39,
+            learning_rate=0.1716640589336998,
+            n_estimators=155,
+            max_depth=11,
+            reg_alpha=0.4160631864481351,
+            reg_lambda=0.7468128527829264,
+            min_split_gain=0.024291042368256514
+        )
+
+    @classmethod
     def create_catboost_regressor(cls, name_suffix="", features: Optional[List[FeatureName]] = None,
                                   pca_n_components=0.96, **model_params) -> CatBoostVectorRegressionModel:
         if features is None:
@@ -76,9 +89,7 @@ class ModelFactory:
     def create_catboost_regressor_hyperopt(cls):
         return cls.create_catboost_regressor(
             name_suffix="hyperopt",
-            features=[FeatureName.PCA_WAVELENGTHS_SENTINEL],
-            pca_n_components=0.9836,
-            depth=4, learning_rate=0.0641, iterations=634, l2_leaf_reg=8.544
+            depth=7.0, learning_rate=0.17586703175567542, iterations=1328, l2_leaf_reg=7.530092630173389
         )
 
     @classmethod

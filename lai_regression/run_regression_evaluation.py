@@ -11,7 +11,6 @@ from sensai.util.logging import datetime_tag
 from sensai.util.string import TagBuilder
 
 from lai_regression.src.data import Dataset, COL_LEAF_AREA_INDEX
-from lai_regression.src.features import FeatureName
 from lai_regression.src.model_factory import ModelFactory
 
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -20,7 +19,7 @@ log = logging.getLogger(__name__)
 
 def main():
     # define & load dataset
-    dataset = Dataset()
+    dataset = Dataset(branch="new_data", dataset_filename="2024_03_18_RtmSimulation_kickstart.csv")
     use_cross_validation = True
     do_plot_feature_importance = True
 
@@ -38,21 +37,12 @@ def main():
         ModelFactory.create_mean_model(),
         ModelFactory.create_linear_regression(),
         ModelFactory.create_random_forest(),
-
-        ModelFactory.create_lgbm_regressor(name_suffix="-no-pca", features=[FeatureName.WETNESS, FeatureName.TREE_SPECIES, FeatureName.WAVELENGTHS, FeatureName.SENTINEL]),
-        ModelFactory.create_lgbm_regressor(name_suffix="-wet-species-sentinel", features=[FeatureName.WETNESS, FeatureName.TREE_SPECIES, FeatureName.SENTINEL]),
-        ModelFactory.create_lgbm_regressor(name_suffix="-pca-only", features=[FeatureName.PCA_WAVELENGTHS_SENTINEL]),
-        ModelFactory.create_lgbm_regressor(name_suffix="-default(pca,wetness,treeSpecies)"),
-
+        ModelFactory.create_lgbm_regressor(),
+        ModelFactory.create_lgbm_regressor_hyperopt(),
         ModelFactory.create_catboost_regressor(),
-        ModelFactory.create_catboost_regressor(name_suffix="-pca-only", features=[FeatureName.PCA_WAVELENGTHS_SENTINEL]),
         ModelFactory.create_catboost_regressor_hyperopt(),
+        ModelFactory.create_svr(model_params={'C': 100, 'epsilon': 0.001, 'kernel': 'rbf'}),
 
-        ModelFactory.create_svr("wavelength-dim-reduction", model_params={'C': 100, 'epsilon': 0.001, 'kernel': 'rbf'}),
-        ModelFactory.create_svr(
-            "all-wavelengths-and-sentinel",
-            features=[FeatureName.WETNESS, FeatureName.TREE_SPECIES, FeatureName.SENTINEL, FeatureName.WAVELENGTHS],
-            model_params={'C': 100, 'epsilon': 0.001, 'kernel': 'rbf'}),
     ]
 
     # declare parameters to be used for evaluation, i.e. how to split the data (fraction and random seed)

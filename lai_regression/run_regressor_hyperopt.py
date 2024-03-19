@@ -55,7 +55,7 @@ class LGBMHyperoptConfig(HyperoptModelConfig):
             'reg_lambda': search_space_element['reg_lambda'],
             'min_split_gain': search_space_element['min_split_gain']
         }
-        return ModelFactory.create_lgbm_regressor(model_params=model_params)
+        return ModelFactory.create_lgbm_regressor(**model_params)
 
     def initial_space(self) -> List[Dict[str, int | float]]:
         return [
@@ -93,11 +93,8 @@ class CatBoostHyperoptConfig(HyperoptModelConfig):
             'iterations': search_space_element['iterations'],
             'l2_leaf_reg': search_space_element['l2_leaf_reg'],
             'verbose': False,
-            "pca_n_components": search_space_element["pca_n_components"]
         }
-        return ModelFactory.create_catboost_regressor(name_suffix="-pca-only",
-                                                      features=[FeatureName.PCA_WAVELENGTHS_SENTINEL],
-                                                      **model_params)
+        return ModelFactory.create_catboost_regressor(**model_params)
 
     def initial_space(self) -> List[Dict[str, int | float]]:
         return [
@@ -106,7 +103,6 @@ class CatBoostHyperoptConfig(HyperoptModelConfig):
                 'learning_rate': 0.1,
                 'iterations': 1000,
                 'l2_leaf_reg': 3,
-                "pca_n_components": 0.96
             }
         ]
 
@@ -116,7 +112,6 @@ class CatBoostHyperoptConfig(HyperoptModelConfig):
             'learning_rate': hp.uniform('learning_rate', 0.01, 0.3),
             'iterations': hp.uniformint('iterations', 500, 1500),
             'l2_leaf_reg': hp.uniform('l2_leaf_reg', 1, 10),
-            "pca_n_components": hp.uniform("pca_n_components", 0.8, 0.99)
         }
 
 
@@ -149,4 +144,4 @@ def run_hyperopt(dataset: Dataset, model_config: HyperoptModelConfig, minutes=30
 
 
 if __name__ == '__main__':
-    logging.run_main(lambda: run_hyperopt(Dataset(), model_config=CatBoostHyperoptConfig(), minutes=5))
+    logging.run_main(lambda: run_hyperopt(Dataset(branch="new_data", dataset_filename="2024_03_18_RtmSimulation_kickstart.csv"), model_config=LGBMHyperoptConfig(), minutes=10))
